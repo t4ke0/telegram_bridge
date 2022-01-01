@@ -100,6 +100,10 @@ func (t *TelegramClient) UpdateWorker(errC chan error) <-chan Command {
 				continue
 			}
 
+			if len(updates.Result) == 0 {
+				continue
+			}
+
 			lastIndex := len(updates.Result) - 1
 			result := updates.Result[lastIndex]
 			uID := result.UpdateID
