@@ -9,6 +9,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/t4ke0/telegram_bridge/pkg/db"
 )
@@ -50,6 +51,10 @@ type TelegramClient struct {
 	baseURL string
 
 	httpClient *http.Client
+
+	tm           *time.Timer
+	dur          time.Duration
+	timeoutLevel int
 }
 
 // NewTelegramClient
@@ -57,7 +62,29 @@ func NewTelegramClient() *TelegramClient {
 	return &TelegramClient{
 		baseURL:    botURL,
 		httpClient: new(http.Client),
+		tm:         time.NewTimer(time.Second * 0),
 	}
+}
+
+// StartTimoutTimer
+func (t *TelegramClient) StartTimoutTimer() {
+	<-t.tm.C
+}
+
+// ResetTimeoutTimer
+func (t *TelegramClient) ResetTimeoutTimer() {
+	t.tm = nil
+	t.tm = time.NewTimer(t.dur)
+}
+
+// IncrementTimeoutDuration
+func (t *TelegramClient) IncrementTimeoutDuration() {
+	t.timeoutLevel++
+	t.dur = time.Second * time.Duration(t.timeoutLevel)
+}
+func (t *TelegramClient) resetTimeoutDuration() {
+	t.timeoutLevel = 0
+	t.dur = time.Second * time.Duration(t.timeoutLevel)
 }
 
 func (t *TelegramClient) makeRequest(method, url string, data []byte) (*http.Response, error) {
@@ -73,6 +100,8 @@ func (t *TelegramClient) makeRequest(method, url string, data []byte) (*http.Res
 	return t.httpClient.Do(req)
 }
 
+const maxTimeoutLevel = 60
+
 // UpdateWorker
 func (t *TelegramClient) UpdateWorker(errC chan error) <-chan Command {
 
@@ -82,6 +111,7 @@ func (t *TelegramClient) UpdateWorker(errC chan error) <-chan Command {
 		url := fmt.Sprintf("%s/getUpdates", t.baseURL)
 		var updateID int
 		for {
+			t.StartTimoutTimer()
 			resp, err := t.makeRequest(http.MethodGet, url, nil)
 			if err != nil {
 				errC <- err
@@ -101,6 +131,9 @@ func (t *TelegramClient) UpdateWorker(errC chan error) <-chan Command {
 			}
 
 			if len(updates.Result) == 0 {
+				t.IncrementTimeoutDuration()
+				fmt.Println(t.dur)
+				t.ResetTimeoutTimer()
 				continue
 			}
 
@@ -108,9 +141,15 @@ func (t *TelegramClient) UpdateWorker(errC chan error) <-chan Command {
 			result := updates.Result[lastIndex]
 			uID := result.UpdateID
 			if uID == updateID {
+				t.IncrementTimeoutDuration()
+				fmt.Println(t.dur)
+				t.ResetTimeoutTimer()
 				continue
 			}
 
+			t.resetTimeoutDuration()
+			t.ResetTimeoutTimer()
+			fmt.Println(t.dur)
 			updateID = uID
 
 			var args []string
