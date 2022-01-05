@@ -24,4 +24,5 @@ require (
 	modernc.org/opt v0.1.1 // indirect
 	modernc.org/strutil v1.1.1 // indirect
 	modernc.org/token v1.0.0 // indirect
+	nis.xgn-dev.cloud/yint.me/go_build v0.0.0-20220101134001-fffaef6b7e27
 )
